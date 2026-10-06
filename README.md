@@ -2,6 +2,13 @@
 
 # 📟 CYBER-DECK TELEMETRY CONSOLE // MK-VI
 
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/ES6+-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![License-MIT](https://img.shields.io/badge/License-MIT-00ffaa?style=flat-square)
+
+A zero-dependency, retro-futuristic mission control dashboard built with Vanilla JavaScript (ES6+), HTML5 Canvas API, and Tailwind CSS.
+
 A zero-dependency, retro-futuristic mission control dashboard built with **Vanilla JavaScript (ES6+)**, **HTML5 Canvas API**, and **Tailwind CSS**. It emulates CRT phosphor monitors and real-time computational telemetry streams combining geometric transformations, wave synthesis, and signed distance field physics.
 
 ---
