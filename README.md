@@ -8,7 +8,7 @@ A zero-dependency, retro-futuristic mission control dashboard built with **Vanil
 
 ## ⚡ Live Demo
 Experience the console directly in your browser:  
-👉 **[Launch Cyber-Deck Console](https://inandenizturk.github.io/cyberdeck-telemetry/)**
+👉 **[Launch Cyber-Deck Console](https://inandenizturk.github.io/CYBERDECK-TELEMETRY-CONSOLE.html/ )**
 
 ---
 
