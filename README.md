@@ -46,5 +46,7 @@ Experience the console directly in your browser:
 No `npm`, `node_modules`, or build pipeline required.
 
 1. Clone the repository:
-   ```bash
-git clone https://github.com/inandenizturk/CYBERDECK-TELEMETRY-CONSOLE.html.git
+2. git clone https://github.com/inandenizturk/CYBERDECK-TELEMETRY-CONSOLE.html.git
+3. Open `index.html` in any modern web browser
+  
+
