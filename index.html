@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBER-DECK TELEMETRY CONSOLE // MK-VI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --glow-color: #00ff9d;
+      --glow-dim: rgba(0, 255, 157, 0.15);
+      --bg-dark: #070b0e;
+      --panel-border: rgba(0, 255, 157, 0.45);
+    }
+    body {
+      background-color: var(--bg-dark);
+      font-family: 'Share Tech Mono', monospace;
+      user-select: none;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    /* CRT Scanline and Vignette Overlay */
+    .crt-overlay {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%),
+      radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,0.85) 100%);
+      background-size: 100% 3px, 100% 100%;
+      z-index: 50;
+    }
+    .hud-glow {
+      box-shadow: 0 0 15px var(--glow-dim), inset 0 0 15px var(--glow-dim);
+      border: 1px solid var(--panel-border);
+    }
+    .corner-bracket {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-color: var(--glow-color);
+    }
+    .top-left { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; }
+    .top-right { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; }
+    .bottom-left { bottom: -1px; left: -1px; border-bottom: 2px solid; border-left: 2px solid; }
+    .bottom-right { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* Terminal Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+    ::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+  </style>
+</head>
+<body class="w-screen h-screen flex flex-col text-xs text-emerald-400">
+<div class="crt-overlay"></div>
+
+<header class="h-10 bg-black/80 border-b border-emerald-500/30 flex items-center justify-between px-4 z-40 select-none">
+  <div class="flex items-center gap-3">
+    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+    <span class="font-bold tracking-widest text-sm text-emerald-300">NETRUNNER // MISSION-CTRL-09</span>
+    <span class="text-[10px] text-emerald-500/70 hidden sm:inline">[NODE: 0x7FA9 - SECURE]</span>
+  </div>
+
+  <div class="flex items-center gap-4 text-[11px]">
+    <div class="hidden md:flex gap-3 text-emerald-400/80">
+      <span>CPU: <b id="cpuUsage" class="text-emerald-300">12.4%</b></span>
+      <span>BUS: <b class="text-emerald-300">400MHz</b></span>
+      <span>SYS CLK: <b id="sysClock" class="text-emerald-300">00:00:00</b></span>
+    </div>
+
+    <!-- Theme Switcher -->
+    <div class="flex items-center gap-1.5 bg-black/60 p-1 rounded border border-emerald-500/40">
+      <button id="themeGreen" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500 hover:brightness-125 transition">PHOSPHOR</button>
+      <button id="themeAmber" class="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-900 text-amber-500 border border-amber-600/50 hover:brightness-125 transition">AMBER</button>
+      <button id="themeCyan" class="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-900 text-cyan-400 border border-cyan-600/50 hover:brightness-125 transition">CYAN</button>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2 p-2 relative z-30 min-h-0 overflow-hidden">
+
+  <!-- LEFT COLUMN: Panel 2 (Waveform) & Panel 4 (Memory/Byte stream) -->
+  <div class="md:col-span-3 flex flex-col gap-2 min-h-0">
+
+    <!-- PANEL 2: Oscilloscope & Waveform Telemetry -->
+    <section class="flex-1 relative hud-glow bg-black/60 rounded p-2 flex flex-col min-h-[180px]">
+      <div class="corner-bracket top-left"></div><div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div><div class="corner-bracket bottom-right"></div>
+      <div class="flex justify-between items-center pb-1 border-b border-emerald-500/20 mb-1">
+        <span class="font-bold tracking-wider">[P2: FOURIER OSCILLOSCOPE]</span>
+        <span class="text-[10px] opacity-75" id="waveFreq">440.2 Hz</span>
+      </div>
+      <div class="flex-1 relative">
+        <canvas id="oscCanvas" class="w-full h-full block rounded"></canvas>
+      </div>
+      <div class="text-[9px] opacity-70 flex justify-between pt-1">
+        <span>AMP: <span id="waveAmp">1.42 V</span></span>
+        <span>PHASE: <span id="wavePhase">0.82π</span></span>
+        <span>HARMONICS: N=5</span>
+      </div>
+    </section>
+
+    <!-- PANEL 4: Hex Memory & Sensor Register Stream -->
+    <section class="flex-1 relative hud-glow bg-black/60 rounded p-2 flex flex-col min-h-[220px]">
+      <div class="corner-bracket top-left"></div><div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div><div class="corner-bracket bottom-right"></div>
+      <div class="flex justify-between items-center pb-1 border-b border-emerald-500/20 mb-1">
+        <span class="font-bold tracking-wider">[P4: MEMORY DUMP & REGISTERS]</span>
+        <span class="text-[9px] px-1 bg-emerald-950/70 border border-emerald-500/30 rounded">PAGE 0x80</span>
+      </div>
+
+      <!-- Live Register Bar -->
+      <div class="grid grid-cols-4 gap-1 text-[10px] py-1 bg-black/40 border-b border-emerald-500/10 mb-1 font-mono">
+        <div>AX:<span class="text-white" id="regAX">FA3B</span></div>
+        <div>BX:<span class="text-white" id="regBX">002C</span></div>
+        <div>CX:<span class="text-white" id="regCX">7F01</span></div>
+        <div>PC:<span class="text-white" id="regPC">1E40</span></div>
+      </div>
+
+      <!-- Scrolling Assembly / Hex -->
+      <div id="hexContainer" class="flex-1 overflow-hidden font-mono text-[10px] leading-tight flex flex-col justify-end space-y-0.5 opacity-90">
+        <!-- Populated by JS -->
+      </div>
+
+      <div class="pt-1.5 border-t border-emerald-500/20 flex justify-between text-[9px] opacity-75">
+        <span>GYRO-X: <span id="gyroX">+0.04</span></span>
+        <span>GYRO-Y: <span id="gyroY">-1.12</span></span>
+        <span>TEMP: <span id="tempSensor">41.8°C</span></span>
+      </div>
+    </section>
+  </div>
+
+  <!-- CENTER COLUMN: Panel 1 (Centerpiece Spiral / Radar Morph) -->
+  <div class="md:col-span-6 flex flex-col min-h-0">
+    <section class="flex-1 relative hud-glow bg-black/70 rounded p-2 flex flex-col">
+      <div class="corner-bracket top-left"></div><div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div><div class="corner-bracket bottom-right"></div>
+      <div class="flex justify-between items-center pb-1.5 border-b border-emerald-500/30 mb-1">
+        <div class="flex items-center gap-2">
+          <span class="font-bold tracking-widest text-sm">[P1: POLAR RADAR / SPIRAL MORPH]</span>
+          <span class="text-[9px] px-1 bg-emerald-900/50 border border-emerald-500/40 rounded text-emerald-200">INTERACTIVE</span>
+        </div>
+        <div class="text-[10px] opacity-80 flex gap-3">
+          <span>R-COORDS: <span id="polarCoords">r: 124.0 θ: 0.84</span></span>
+          <span class="hidden sm:inline">WARP: <span id="spiralFactor">1.00</span></span>
+        </div>
+      </div>
+
+      <div class="flex-1 relative overflow-hidden rounded bg-black/50">
+        <canvas id="spiralCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+        <div class="absolute bottom-2 left-2 pointer-events-none text-[9px] opacity-60">
+          [DRAG / MOVE MOUSE: POLAR SKEW & ROTATION]
+        </div>
+        <div class="absolute top-2 right-2 pointer-events-none text-right text-[9px] opacity-65 leading-tight">
+          <span>RADIAL RESOLUTION: 720 PTS</span><br>
+          <span>SPIRAL FACTOR: k=0.18</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- RIGHT COLUMN: Panel 3 (SDF Torus/Field) & Panel 5 (Command Console) -->
+  <div class="md:col-span-3 flex flex-col gap-2 min-h-0">
+
+    <!-- PANEL 3: 2D SDF Isoline Field Visualizer -->
+    <section class="flex-1 relative hud-glow bg-black/60 rounded p-2 flex flex-col min-h-[190px]">
+      <div class="corner-bracket top-left"></div><div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div><div class="corner-bracket bottom-right"></div>
+      <div class="flex justify-between items-center pb-1 border-b border-emerald-500/20 mb-1">
+        <span class="font-bold tracking-wider">[P3: 2D TORUS/RING SDF FIELD]</span>
+        <span class="text-[9px] text-emerald-300">d = ||q|| - r</span>
+      </div>
+      <div class="flex-1 relative">
+        <canvas id="sdfCanvas" class="w-full h-full block rounded"></canvas>
+      </div>
+      <div class="pt-1 flex justify-between text-[9px] opacity-75">
+        <span>R_MAJOR: 0.55</span>
+        <span>R_MINOR: 0.22</span>
+        <span>ISOLINES: 12</span>
+      </div>
+    </section>
+
+    <!-- PANEL 5: Terminal Feed & Diagnostic Logger -->
+    <section class="flex-1 relative hud-glow bg-black/60 rounded p-2 flex flex-col min-h-[210px]">
+      <div class="corner-bracket top-left"></div><div class="corner-bracket top-right"></div>
+      <div class="corner-bracket bottom-left"></div><div class="corner-bracket bottom-right"></div>
+      <div class="flex justify-between items-center pb-1 border-b border-emerald-500/20 mb-1">
+        <span class="font-bold tracking-wider">[P5: DIAGNOSTIC LOG & EXEC]</span>
+        <span class="text-[9px] text-emerald-400">TTY // 9600 BAUD</span>
+      </div>
+
+      <div id="terminalLog" class="flex-1 overflow-y-auto space-y-1 font-mono text-[10px] opacity-90 pr-1">
+        <!-- Terminal logs injected dynamically -->
+      </div>
+
+      <form id="termForm" class="mt-1 pt-1 border-t border-emerald-500/30 flex items-center gap-1">
+        <span class="text-emerald-400 font-bold">&gt;</span>
+        <input id="termInput" type="text" autocomplete="off" placeholder="type 'help', 'warp', 'scan'..."
+               class="flex-1 bg-black/70 border border-emerald-500/40 rounded px-1.5 py-0.5 text-emerald-300 focus:outline-none focus:border-emerald-400 font-mono text-[10px]">
+        <button type="submit" class="px-2 py-0.5 bg-emerald-950 border border-emerald-500/40 rounded text-[9px] text-emerald-300 hover:bg-emerald-900 transition">EXEC</button>
+      </form>
+    </section>
+  </div>
+
+</main>
+
+<script>
+  // Color Palette Theme Engine
+  const themes = {
+    green: {
+      glow: '#00ff9d',
+      dim: 'rgba(0, 255, 157, 0.15)',
+      border: 'rgba(0, 255, 157, 0.45)',
+      text: 'text-emerald-400',
+      stroke: '#00ff9d',
+      strokeSecondary: '#00aa66',
+      isoline: 'rgba(0, 255, 157, 0.25)',
+      accent: '#55ffc4'
+    },
+    amber: {
+      glow: '#ffaa00',
+      dim: 'rgba(255, 170, 0, 0.15)',
+      border: 'rgba(255, 170, 0, 0.45)',
+      text: 'text-amber-400',
+      stroke: '#ffaa00',
+      strokeSecondary: '#cc7a00',
+      isoline: 'rgba(255, 170, 0, 0.25)',
+      accent: '#ffd280'
+    },
+    cyan: {
+      glow: '#00e5ff',
+      dim: 'rgba(0, 229, 255, 0.15)',
+      border: 'rgba(0, 229, 255, 0.45)',
+      text: 'text-cyan-400',
+      stroke: '#00e5ff',
+      strokeSecondary: '#0088b3',
+      isoline: 'rgba(0, 229, 255, 0.25)',
+      accent: '#80f2ff'
+    }
+  };
+
+  let activeTheme = themes.green;
+
+  function applyTheme(name) {
+    activeTheme = themes[name];
+    document.documentElement.style.setProperty('--glow-color', activeTheme.glow);
+    document.documentElement.style.setProperty('--glow-dim', activeTheme.dim);
+    document.documentElement.style.setProperty('--panel-border', activeTheme.border);
+
+    // Update body text color
+    document.body.className = `w-screen h-screen flex flex-col text-xs ${activeTheme.text}`;
+
+    logToTerminal(`[SYSTEM] PALETTE SHIFTED -> ${name.toUpperCase()}`);
+  }
+
+  document.getElementById('themeGreen').addEventListener('click', () => applyTheme('green'));
+  document.getElementById('themeAmber').addEventListener('click', () => applyTheme('amber'));
+  document.getElementById('themeCyan').addEventListener('click', () => applyTheme('cyan'));
+
+  // High DPI Canvas Resizer
+  function setupCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    return { ctx, width: rect.width, height: rect.height };
+  }
+
+  const spiralCanvas = document.getElementById('spiralCanvas');
+  let mouseX = 0, mouseY = 0, targetMouseX = 0, targetMouseY = 0;
+  let isMouseActive = false;
+
+  spiralCanvas.addEventListener('mousemove', (e) => {
+    const rect = spiralCanvas.getBoundingClientRect();
+    targetMouseX = (e.clientX - rect.left) - rect.width / 2;
+    targetMouseY = (e.clientY - rect.top) - rect.height / 2;
+    isMouseActive = true;
+  });
+
+  spiralCanvas.addEventListener('mouseleave', () => {
+    isMouseActive = false;
+  });
+
+  function drawCenterpiece(ctx, w, h, time) {
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const maxRadius = Math.min(w, h) * 0.44;
+
+    // Smooth mouse interpolation
+    if (!isMouseActive) {
+      targetMouseX = Math.sin(time * 0.8) * (w * 0.15);
+      targetMouseY = Math.cos(time * 0.6) * (h * 0.15);
+    }
+    mouseX += (targetMouseX - mouseX) * 0.08;
+    mouseY += (targetMouseY - mouseY) * 0.08;
+
+    // Update polar readout
+    const rVal = Math.hypot(mouseX, mouseY).toFixed(1);
+    const thetaVal = (Math.atan2(mouseY, mouseX) / Math.PI).toFixed(2);
+    document.getElementById('polarCoords').innerText = `r:${rVal} θ:${thetaVal}π`;
+
+    // Morphing blend parameter: oscillates between pure logarithmic spiral (0.0) and concentric circles (1.0)
+    const morphFactor = (Math.sin(time * 0.7) + 1) / 2;
+    document.getElementById('spiralFactor').innerText = morphFactor.toFixed(2);
+
+    // Radar Crosshairs
+    ctx.save();
+    ctx.strokeStyle = activeTheme.dim;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+    ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    // Rotating compass ticks
+    ctx.strokeStyle = activeTheme.border;
+    for (let i = 0; i < 36; i++) {
+      const rad = (i * 10 * Math.PI) / 180 + time * 0.05;
+      const outerR = maxRadius + 10;
+      const innerR = i % 9 === 0 ? maxRadius - 2 : maxRadius + 4;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(rad) * innerR, cy + Math.sin(rad) * innerR);
+      ctx.lineTo(cx + Math.cos(rad) * outerR, cy + Math.sin(rad) * outerR);
+      ctx.stroke();
+    }
+
+    // Animated Morph Curve (Spiral <-> Concentric Rings)
+    const totalPoints = 600;
+    const arms = 3;
+
+    for (let arm = 0; arm < arms; arm++) {
+      const armOffset = (arm * 2 * Math.PI) / arms;
+      ctx.beginPath();
+      ctx.strokeStyle = arm === 0 ? activeTheme.accent : activeTheme.stroke;
+      ctx.lineWidth = arm === 0 ? 2 : 1.2;
+      ctx.shadowColor = activeTheme.glow;
+      ctx.shadowBlur = arm === 0 ? 8 : 3;
+
+      for (let i = 0; i < totalPoints; i++) {
+        const t = i / totalPoints;
+        const theta = t * 18 * Math.PI + time * 1.5 + armOffset;
+
+        // Pure spiral radius vs pure concentric step radius
+        const spiralR = t * maxRadius;
+        const ringIndex = Math.floor(t * 8);
+        const circleR = (ringIndex / 8) * maxRadius + (t * 12);
+
+        // Interpolate between spiral and quantized concentric orbits
+        const currentR = spiralR * (1 - morphFactor) + circleR * morphFactor;
+
+        // Mouse warp displacement
+        const warpX = (mouseX / w) * Math.sin(theta * 2) * 25;
+        const warpY = (mouseY / h) * Math.cos(theta * 2) * 25;
+
+        const px = cx + Math.cos(theta) * currentR + warpX;
+        const py = cy + Math.sin(theta) * currentR + warpY;
+
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Sweeping radar wedge
+    const sweepAngle = (time * 1.8) % (Math.PI * 2);
+    ctx.shadowBlur = 0;
+    const gradient = ctx.createRadialGradient(cx, cy, 5, cx, cy, maxRadius);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(0.8, activeTheme.dim);
+    gradient.addColorStop(1, activeTheme.border);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, maxRadius, sweepAngle, sweepAngle + 0.35);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.restore();
+
+    // Wandering radar blips
+    for (let b = 1; b <= 4; b++) {
+      const blipAngle = b * 1.6 + time * 0.2;
+      const blipDist = ((b * 0.22) * maxRadius) % maxRadius;
+      const bx = cx + Math.cos(blipAngle) * blipDist;
+      const by = cy + Math.sin(blipAngle) * blipDist;
+
+      ctx.fillStyle = activeTheme.accent;
+      ctx.beginPath();
+      ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = activeTheme.strokeSecondary;
+      ctx.strokeRect(bx - 5, by - 5, 10, 10);
+    }
+
+    ctx.restore();
+  }
+
+  const oscCanvas = document.getElementById('oscCanvas');
+  function drawOscilloscope(ctx, w, h, time) {
+    ctx.clearRect(0, 0, w, h);
+
+    const midY = h / 2;
+
+    // Background Grid
+    ctx.strokeStyle = activeTheme.dim;
+    ctx.lineWidth = 0.5;
+    const stepX = 20, stepY = 15;
+    for (let x = 0; x < w; x += stepX) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += stepY) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Primary Fourier Wave (fundamental + 3 harmonics + slight noise)
+    ctx.beginPath();
+    ctx.strokeStyle = activeTheme.stroke;
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = activeTheme.glow;
+    ctx.shadowBlur = 6;
+
+    const f1 = 2.0;
+    const f2 = 5.0;
+    const f3 = 9.0;
+
+    for (let x = 0; x < w; x++) {
+      const nx = (x / w) * Math.PI * 4;
+      const y1 = Math.sin(nx * f1 + time * 3.0);
+      const y2 = 0.35 * Math.sin(nx * f2 - time * 2.2);
+      const y3 = 0.15 * Math.sin(nx * f3 + time * 4.5);
+      const noise = (Math.random() - 0.5) * 0.04;
+
+      const composite = (y1 + y2 + y3 + noise) * (h * 0.32);
+      const y = midY + composite;
+
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Secondary Carrier Wave (Envelope)
+    ctx.beginPath();
+    ctx.strokeStyle = activeTheme.strokeSecondary;
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 0;
+    for (let x = 0; x < w; x += 2) {
+      const nx = (x / w) * Math.PI * 6;
+      const env = Math.cos(nx * 0.5 + time) * Math.cos(nx * 4.0 - time * 2);
+      const y = midY + env * (h * 0.22);
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Dynamic Hz readout fluctuation
+    if (Math.random() < 0.1) {
+      const liveHz = (440.0 + Math.sin(time) * 12.5).toFixed(1);
+      document.getElementById('waveFreq').innerText = `${liveHz} Hz`;
+      document.getElementById('wavePhase').innerText = `${(Math.sin(time) * 0.5 + 0.5).toFixed(2)}π`;
+    }
+  }
+
+  const sdfCanvas = document.getElementById('sdfCanvas');
+  function drawSDF(ctx, w, h, time) {
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const scale = Math.min(w, h) * 0.42;
+
+    // 2D Torus / Ring Signed Distance Function:
+    // d(p) = | ||p|| - R_major | - r_minor
+    const R_major = 0.55 + Math.sin(time * 1.2) * 0.08;
+    const r_minor = 0.20 + Math.cos(time * 0.8) * 0.04;
+
+    // Draw concentric isoline contours calculated from the SDF equation
+    const isolineCount = 14;
+    for (let i = 0; i < isolineCount; i++) {
+      const isoDist = (i - isolineCount / 2) * 0.08;
+      // Target radii where |radius - R_major| - r_minor = isoDist
+      // radius = R_major +- (r_minor + isoDist)
+      const offset = r_minor + isoDist;
+
+      ctx.beginPath();
+      if (offset >= 0) {
+        const rInner = (R_major - offset) * scale;
+        const rOuter = (R_major + offset) * scale;
+
+        if (rInner > 2) {
+          ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+        }
+        if (rOuter > 2) {
+          ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+        }
+      }
+
+      const isZeroLevel = Math.abs(isoDist) < 0.04;
+      ctx.strokeStyle = isZeroLevel ? activeTheme.accent : activeTheme.isoline;
+      ctx.lineWidth = isZeroLevel ? 2 : 0.8;
+      if (isZeroLevel) {
+        ctx.shadowColor = activeTheme.glow;
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      ctx.stroke();
+    }
+
+    // Animated sampling rays demonstrating zero-crossing detection
+    const rayAngle = time * 0.9;
+    const rx = Math.cos(rayAngle) * scale * 0.9;
+    const ry = Math.sin(rayAngle) * scale * 0.9;
+
+    ctx.strokeStyle = activeTheme.dim;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + rx, cy + ry);
+    ctx.stroke();
+
+    // Intersection points on the surface (d=0)
+    const p1 = (R_major - r_minor) * scale;
+    const p2 = (R_major + r_minor) * scale;
+    [p1, p2].forEach(dist => {
+      const ix = cx + Math.cos(rayAngle) * dist;
+      const iy = cy + Math.sin(rayAngle) * dist;
+      ctx.fillStyle = activeTheme.stroke;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  const hexContainer = document.getElementById('hexContainer');
+  const hexOps = ['MOV', 'XOR', 'PUSH', 'JMP', 'CMP', 'AND', 'SHR', 'LEA', 'INT', 'NOP'];
+  const maxHexLines = 11;
+  let hexLines = [];
+
+  function generateHexLine() {
+    const addr = '0x' + (Math.floor(Math.random() * 0xEFFF) + 0x1000).toString(16).toUpperCase();
+    const op = hexOps[Math.floor(Math.random() * hexOps.length)];
+    const bytes = Array.from({length: 4}, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    return `<div class="flex justify-between font-mono"><span class="text-white/60">${addr}</span> <span>${bytes}</span> <span class="font-bold text-emerald-300">${op}</span></div>`;
+  }
+
+  // Pre-populate lines
+  for (let i = 0; i < maxHexLines; i++) {
+    hexLines.push(generateHexLine());
+  }
+  hexContainer.innerHTML = hexLines.join('');
+
+  setInterval(() => {
+    hexLines.shift();
+    hexLines.push(generateHexLine());
+    hexContainer.innerHTML = hexLines.join('');
+
+    // Randomize Register states
+    document.getElementById('regAX').innerText = Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    document.getElementById('regBX').innerText = Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    document.getElementById('regPC').innerText = Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+
+    // Sensor telemetry jitter
+    document.getElementById('gyroX').innerText = (Math.sin(Date.now() * 0.002) * 1.5).toFixed(2);
+    document.getElementById('gyroY').innerText = (Math.cos(Date.now() * 0.003) * 1.2).toFixed(2);
+    document.getElementById('tempSensor').innerText = (41.0 + Math.sin(Date.now() * 0.001) * 2.3).toFixed(1) + '°C';
+  }, 280);
+
+  const terminalLog = document.getElementById('terminalLog');
+  const termForm = document.getElementById('termForm');
+  const termInput = document.getElementById('termInput');
+
+  function logToTerminal(msg, isUser = false) {
+    const line = document.createElement('div');
+    const timeStr = new Date().toTimeString().split(' ')[0];
+    line.className = isUser ? 'text-white' : 'text-emerald-400/90';
+    line.innerHTML = `<span class="opacity-40">[${timeStr}]</span> ${msg}`;
+    terminalLog.appendChild(line);
+    terminalLog.scrollTop = terminalLog.scrollHeight;
+  }
+
+  // Default boot messages
+  const bootSequence = [
+    "BOOT SEQUENCE INIT // PROTOCOL V4",
+    "CANVAS RENDERER LOADED: 60FPS STABLE",
+    "SDF MATRIX CALIBRATED: TORUS 2D FIELD ACTIVE",
+    "POLAR RADAR HARMONICS ONLINE...",
+    "TYPE 'HELP' FOR COMMAND DISPATCH"
+  ];
+  bootSequence.forEach((msg, idx) => setTimeout(() => logToTerminal(msg), idx * 250));
+
+  // Automated periodic diagnostic message
+  const autoLogs = [
+    "BUS_POLL: Acknowledge ACK from 0x7FA9",
+    "WATCHDOG: Memory integrity 99.87% OK",
+    "TELEMETRY: Gyro stabilized. Delta drift < 0.02",
+    "THERMAL: Core heat dissipation steady",
+    "SWEEP: Target blips tracked on channel-A"
+  ];
+  setInterval(() => {
+    if (Math.random() < 0.4) {
+      const randMsg = autoLogs[Math.floor(Math.random() * autoLogs.length)];
+      logToTerminal(randMsg);
+    }
+  }, 4500);
+
+  termForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = termInput.value.trim().toLowerCase();
+    if (!val) return;
+
+    logToTerminal(`&gt; ${val}`, true);
+    termInput.value = '';
+
+    // Command dispatch
+    switch (val) {
+      case 'help':
+        logToTerminal("AVAILABLE CMDS: help, scan, clear, color [green|amber|cyan], warp, status");
+        break;
+      case 'scan':
+        logToTerminal("[SCANNING] Sector 7 sweep completed. 3 foreign blips tagged.");
+        break;
+      case 'clear':
+        terminalLog.innerHTML = '';
+        break;
+      case 'color green':
+        applyTheme('green');
+        break;
+      case 'color amber':
+        applyTheme('amber');
+        break;
+      case 'color cyan':
+        applyTheme('cyan');
+        break;
+      case 'warp':
+        targetMouseX = (Math.random() - 0.5) * 300;
+        targetMouseY = (Math.random() - 0.5) * 300;
+        logToTerminal("[RADAR WARP] Polar coordinates randomized.");
+        break;
+      case 'status':
+        logToTerminal("SYSTEM METRICS: ALL 5 PANELS OPERATING IN SYNCHRONY.");
+        break;
+      default:
+        logToTerminal(`ERR: Unknown command '${val}'. Type 'help'.`);
+        break;
+    }
+  });
+
+  let lastClockUpdate = 0;
+  function mainLoop(timestamp) {
+    const time = timestamp * 0.001;
+
+    // Update System Clock Header
+    if (timestamp - lastClockUpdate > 1000) {
+      document.getElementById('sysClock').innerText = new Date().toTimeString().split(' ')[0];
+      document.getElementById('cpuUsage').innerText = (11.0 + Math.sin(time) * 4.5).toFixed(1) + '%';
+      lastClockUpdate = timestamp;
+    }
+
+    // Render Panel 1 (Center Spiral)
+    const p1 = setupCanvas(spiralCanvas);
+    drawCenterpiece(p1.ctx, p1.width, p1.height, time);
+
+    // Render Panel 2 (Oscilloscope)
+    const p2 = setupCanvas(oscCanvas);
+    drawOscilloscope(p2.ctx, p2.width, p2.height, time);
+
+    // Render Panel 3 (SDF Torus Field)
+    const p3 = setupCanvas(sdfCanvas);
+    drawSDF(p3.ctx, p3.width, p3.height, time);
+
+    requestAnimationFrame(mainLoop);
+  }
+
+  // Start on window load
+  window.addEventListener('load', () => {
+    requestAnimationFrame(mainLoop);
+  });
+
+  // Resize event listener
+  window.addEventListener('resize', () => {
+    setupCanvas(spiralCanvas);
+    setupCanvas(oscCanvas);
+    setupCanvas(sdfCanvas);
+  });
+</script>
+</body>
+</html>
